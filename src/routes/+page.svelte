@@ -70,14 +70,25 @@
   }
 
   onMount(async () => {
+    console.log('Component mounted, checking for redirect result...');
+    
     // Handle redirect result from Google Sign-In
     try {
-      await handleRedirectResult();
-    } catch (error) {
+      const user = await handleRedirectResult();
+      if (user) {
+        console.log('User signed in via redirect:', user.email);
+      } else {
+        console.log('No redirect result found');
+      }
+    } catch (error: any) {
       console.error('Redirect result error:', error);
+      if (error.code === 'auth/unauthorized-domain') {
+        console.error('Domain not authorized in Firebase Console');
+      }
     }
     
     unsubscribeAuth = onAuthChange(async (user) => {
+      console.log('Auth state changed:', user?.email || 'No user');
       currentUser = user;
       authLoading = false;
       

@@ -8,9 +8,12 @@
     loading = true;
     error = '';
     try {
+      console.log('Starting Google Sign-In redirect...');
       await signInWithGoogle();
+      // User will be redirected, so this code won't execute
     } catch (err: any) {
       console.error('Sign in error:', err);
+      loading = false;
       if (err.code === 'auth/popup-closed-by-user') {
         error = 'Sign-in popup was closed. Please try again.';
       } else if (err.code === 'auth/unauthorized-domain') {
@@ -20,8 +23,6 @@
       } else {
         error = `Failed to sign in: ${err.message || 'Please try again.'}`;
       }
-    } finally {
-      loading = false;
     }
   }
 </script>
