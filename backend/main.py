@@ -20,10 +20,12 @@ class Task(BaseModel):
     id: int
     text: str
     column: str
+    userId: Optional[str] = None
 
 class TaskCreate(BaseModel):
     text: str
     column: str = "Planning"
+    userId: str
 
 class TaskUpdate(BaseModel):
     text: Optional[str] = None
@@ -77,9 +79,10 @@ async def root():
     }
 
 @app.get("/tasks", response_model=List[Task])
-async def get_tasks():
+async def get_tasks(userId: str):
     try:
-        return [Task(**task) for task in tasks_db]
+        user_tasks = [Task(**task) for task in tasks_db if task.get('userId') == userId]
+        return user_tasks
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching tasks: {str(e)}")
 
@@ -90,7 +93,8 @@ async def create_task(task: TaskCreate):
         new_task = {
             "id": next_id,
             "text": task.text,
-            "column": task.column
+            "column": task.column,
+            "userId": task.userId
         }
         
         tasks_db.append(new_task)

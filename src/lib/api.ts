@@ -15,11 +15,13 @@ export interface Task {
   id: number;
   text: string;
   column: string;
+  userId?: string;
 }
 
 export interface TaskCreate {
   text: string;
   column?: string;
+  userId: string;
 }
 
 export interface TaskUpdate {
@@ -58,8 +60,8 @@ class ApiService {
     }
   }
 
-  async getTasks(): Promise<Task[]> {
-    return this.request<Task[]>('/tasks');
+  async getTasks(userId: string): Promise<Task[]> {
+    return this.request<Task[]>(`/tasks?userId=${userId}`);
   }
 
   async createTask(task: TaskCreate): Promise<Task> {
