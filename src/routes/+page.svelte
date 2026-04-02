@@ -4,6 +4,7 @@
   import { apiService, type Task } from '../lib/api';
   import { onAuthChange, logout } from '../lib/auth';
   import Login from '../lib/components/Login.svelte';
+  import TaskDetailModal from '../lib/components/TaskDetailModal.svelte';
   import type { User } from 'firebase/auth';
 
   const columns = ["Planning", "To Do", "In Progress", "In Review", "Done"];
@@ -20,6 +21,7 @@
   let newTask = '';
   let taskId = 1;
   let errorMessage = '';
+  let selectedTask: Task | null = null;
 
   let board: Record<string, Task[]> = {};
   columns.forEach(col => board[col] = []);
@@ -272,6 +274,26 @@
     board[column] = board[column].filter(task => task.id !== taskId);
     board = { ...board };
     saveToLocalStorage();
+  }
+
+  async function handleTaskDetailSave(event: CustomEvent<Task>) {
+    const updatedTask = event.detail;
+    if (apiConnected) {
+      try {
+        await apiService.updateTask(updatedTask.id, {
+          description: updatedTask.description,
+          assignees: updatedTask.assignees,
+        });
+      } catch (error) {
+        console.error('API update failed, saving locally:', error);
+      }
+    }
+    // Update board state with new task data
+    const col = updatedTask.column;
+    board[col] = board[col].map(t => t.id === updatedTask.id ? updatedTask : t);
+    board = { ...board };
+    saveToLocalStorage();
+    selectedTask = null;
   }
 </script>
 
@@ -751,6 +773,45 @@
     background: #10b981;
   }
   
+  .task-indicators {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .indicator-desc {
+    font-size: 0.85rem;
+    line-height: 1;
+    opacity: 0.75;
+  }
+
+  .assignee-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 700;
+    font-family: 'Inter', sans-serif;
+    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.35);
+    border: 1.5px solid rgba(255, 255, 255, 0.8);
+    flex-shrink: 0;
+  }
+
+  .assignee-badge-overflow {
+    background: linear-gradient(135deg, #991b1b 0%, #b91c1c 100%);
+    width: auto;
+    padding: 0 5px;
+    border-radius: 11px;
+    font-size: 0.6rem;
+  }
+
   .delete-btn {
     background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
     color: white;
@@ -934,7 +995,9 @@
             on:finalize={(event) => handleFinalize(event, column)}
           >
             {#each board[column] as task (task.id)}
-              <div class="task">
+              <!-- svelte-ignore a11y-click-events-have-key-events -->
+              <!-- svelte-ignore a11y-no-static-element-interactions -->
+              <div class="task" on:click={(e) => { e.stopPropagation(); selectedTask = task; }}>
                 <div class="task-content">
                   <div class="task-text">{task.text}</div>
                   {#if column === "Done"}
@@ -951,6 +1014,23 @@
                   <span class="task-id">TASK-{task.id}</span>
                   <div class="task-priority"></div>
                 </div>
+                {#if task.description || (task.assignees && task.assignees.length > 0)}
+                  <div class="task-indicators">
+                    {#if task.description}
+                      <span class="indicator-desc" title="Has description">📝</span>
+                    {/if}
+                    {#if task.assignees && task.assignees.length > 0}
+                      {#each task.assignees.slice(0, 3) as assignee}
+                        <span class="assignee-badge" title={assignee}>
+                          {assignee.trim().charAt(0).toUpperCase()}
+                        </span>
+                      {/each}
+                      {#if task.assignees.length > 3}
+                        <span class="assignee-badge assignee-badge-overflow">+{task.assignees.length - 3}</span>
+                      {/if}
+                    {/if}
+                  </div>
+                {/if}
               </div>
             {/each}
           </div>
@@ -959,4 +1039,11 @@
     </div>
   </div>
 </div>
+
+<TaskDetailModal
+  task={selectedTask ?? { id: 0, text: '', column: '' }}
+  open={selectedTask !== null}
+  on:save={handleTaskDetailSave}
+  on:close={() => selectedTask = null}
+/>
 {/if}

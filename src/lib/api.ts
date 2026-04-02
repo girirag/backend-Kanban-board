@@ -16,6 +16,8 @@ export interface Task {
   text: string;
   column: string;
   userId?: string;
+  description?: string;
+  assignees?: string[];
 }
 
 export interface TaskCreate {
@@ -27,6 +29,8 @@ export interface TaskCreate {
 export interface TaskUpdate {
   text?: string;
   column?: string;
+  description?: string;
+  assignees?: string[];
 }
 
 class ApiService {

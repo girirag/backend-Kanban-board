@@ -21,6 +21,8 @@ class Task(BaseModel):
     text: str
     column: str
     userId: Optional[str] = None
+    description: Optional[str] = None
+    assignees: Optional[List[str]] = []
 
 class TaskCreate(BaseModel):
     text: str
@@ -30,6 +32,8 @@ class TaskCreate(BaseModel):
 class TaskUpdate(BaseModel):
     text: Optional[str] = None
     column: Optional[str] = None
+    description: Optional[str] = None
+    assignees: Optional[List[str]] = None
 
 # In-memory storage for now (will be replaced with Firebase)
 tasks_db = []
@@ -132,6 +136,12 @@ async def update_task(task_id: int, task_update: TaskUpdate):
         if task_update.column is not None:
             tasks_db[task_index]['column'] = task_update.column
             update_data['column'] = task_update.column
+        if task_update.description is not None:
+            tasks_db[task_index]['description'] = task_update.description
+            update_data['description'] = task_update.description
+        if task_update.assignees is not None:
+            tasks_db[task_index]['assignees'] = task_update.assignees
+            update_data['assignees'] = task_update.assignees
         
         # Update in Firebase if connected
         if firebase_connected and update_data:
