@@ -351,10 +351,9 @@
   
   .board-container {
     background: 
-      radial-gradient(circle at 20% 50%, rgba(220, 38, 38, 0.15) 0%, transparent 50%),
-      radial-gradient(circle at 80% 80%, rgba(239, 68, 68, 0.15) 0%, transparent 50%),
-      radial-gradient(circle at 40% 20%, rgba(185, 28, 28, 0.1) 0%, transparent 50%),
-      linear-gradient(135deg, #7f1d1d 0%, #991b1b 15%, #b91c1c 30%, #dc2626 50%, #b91c1c 70%, #991b1b 85%, #7f1d1d 100%);
+      radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.03) 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.03) 0%, transparent 50%),
+      #000000;
     background-size: 100% 100%;
     min-height: 100vh;
     padding: 2rem;
