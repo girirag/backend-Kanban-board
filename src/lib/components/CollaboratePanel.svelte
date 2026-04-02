@@ -63,9 +63,7 @@
       emailInput = '';
     } catch (err) {
       if (err instanceof Error) {
-        if (err.message.includes('404')) {
-          errorMsg = 'User not found. Make sure they have signed in at least once.';
-        } else if (err.message.includes('409')) {
+        if (err.message.includes('409')) {
           errorMsg = 'That user is already a collaborator.';
         } else {
           errorMsg = 'Failed to add collaborator. Please try again.';
@@ -136,6 +134,9 @@
                 <li class="collaborator-item">
                   <span class="collab-avatar">{collab.collaboratorEmail.charAt(0).toUpperCase()}</span>
                   <span class="collab-email">{collab.collaboratorEmail}</span>
+                  {#if collab.pending}
+                    <span class="pending-badge">Pending</span>
+                  {/if}
                   <button
                     class="remove-btn"
                     on:click={() => handleRemove(collab)}
@@ -408,6 +409,18 @@
   .remove-btn:hover {
     background: #fee2e2;
     border-color: #dc2626;
+  }
+
+  .pending-badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #92400e;
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   /* Invite row */

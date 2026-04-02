@@ -45,6 +45,7 @@ class CollaborationRecord(BaseModel):
     collaboratorUid: str
     collaboratorEmail: str
     createdAt: str
+    pending: Optional[bool] = False
 
 class InvitedBoard(BaseModel):
     inviteId: str
@@ -217,28 +218,26 @@ async def create_collaboration(payload: CollaborationCreate):
     if not firebase_connected or not firebase_db:
         raise HTTPException(status_code=503, detail="Firebase not connected")
 
-    # Look up collaborator by email in users collection
-    users_ref = firebase_db.collection('users')
-    query = users_ref.where('email', '==', payload.collaboratorEmail).limit(1).stream()
-    user_doc = next(query, None)
-    if user_doc is None:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    collaborator_uid = user_doc.id
-
-    # Check for duplicate
     collabs_ref = firebase_db.collection('collaborations')
+
+    # Check for duplicate by email (works for both registered and pending invites)
     dup_query = (
         collabs_ref
         .where('ownerUserId', '==', payload.ownerUserId)
-        .where('collaboratorUid', '==', collaborator_uid)
+        .where('collaboratorEmail', '==', payload.collaboratorEmail)
         .limit(1)
         .stream()
     )
     if next(dup_query, None) is not None:
         raise HTTPException(status_code=409, detail="Already a collaborator")
 
-    # Write new collaboration record
+    # Look up collaborator by email — if not found, store as pending invite
+    users_ref = firebase_db.collection('users')
+    query = users_ref.where('email', '==', payload.collaboratorEmail).limit(1).stream()
+    user_doc = next(query, None)
+    collaborator_uid = user_doc.id if user_doc else ''
+
+    # Write new collaboration record (uid may be empty for pending invites)
     created_at = datetime.utcnow().isoformat()
     doc_ref = collabs_ref.document()
     record = {
@@ -246,6 +245,7 @@ async def create_collaboration(payload: CollaborationCreate):
         'collaboratorUid': collaborator_uid,
         'collaboratorEmail': payload.collaboratorEmail,
         'createdAt': created_at,
+        'pending': collaborator_uid == '',
     }
     doc_ref.set(record)
 

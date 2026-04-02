@@ -37,6 +37,7 @@ export interface Collaborator {
   id: string;
   collaboratorUid: string;
   collaboratorEmail: string;
+  pending?: boolean;
 }
 
 export interface InvitedBoard {
