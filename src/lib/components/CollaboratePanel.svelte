@@ -1,6 +1,8 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { apiService, type Collaborator } from '../api';
+  import { db } from '../firebase';
+  import { collection, query, where, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
 
   export let ownerUserId: string;
   export let currentUserEmail: string;
@@ -18,8 +20,22 @@
     loading = true;
     errorMsg = '';
     try {
-      collaborators = await apiService.getCollaborators(ownerUserId);
-    } catch {
+      // Try API first, fall back to Firestore directly
+      try {
+        collaborators = await apiService.getCollaborators(ownerUserId);
+      } catch {
+        // Fallback: query Firestore directly
+        const q = query(collection(db, 'collaborations'), where('ownerUserId', '==', ownerUserId));
+        const snapshot = await getDocs(q);
+        collaborators = snapshot.docs.map(d => ({
+          id: d.id,
+          collaboratorUid: d.data().collaboratorUid ?? '',
+          collaboratorEmail: d.data().collaboratorEmail ?? '',
+          pending: d.data().pending ?? false,
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to load collaborators:', err);
       errorMsg = 'Failed to load collaborators.';
     } finally {
       loading = false;
@@ -58,19 +74,39 @@
     adding = true;
     errorMsg = '';
     try {
-      const newCollab = await apiService.addCollaborator({ ownerUserId, collaboratorEmail: email });
+      let newCollab: Collaborator;
+      try {
+        newCollab = await apiService.addCollaborator({ ownerUserId, collaboratorEmail: email });
+      } catch (err) {
+        if (err instanceof Error && err.message.includes('409')) {
+          errorMsg = 'That user is already a collaborator.';
+          adding = false;
+          return;
+        }
+        // Fallback: write directly to Firestore
+        const existingSnap = await getDocs(query(
+          collection(db, 'collaborations'),
+          where('ownerUserId', '==', ownerUserId),
+          where('collaboratorEmail', '==', email)
+        ));
+        if (!existingSnap.empty) {
+          errorMsg = 'That user is already a collaborator.';
+          adding = false;
+          return;
+        }
+        const docRef = await addDoc(collection(db, 'collaborations'), {
+          ownerUserId,
+          collaboratorUid: '',
+          collaboratorEmail: email,
+          createdAt: new Date().toISOString(),
+          pending: true,
+        });
+        newCollab = { id: docRef.id, collaboratorUid: '', collaboratorEmail: email, pending: true };
+      }
       collaborators = [...collaborators, newCollab];
       emailInput = '';
-    } catch (err) {
-      if (err instanceof Error) {
-        if (err.message.includes('409')) {
-          errorMsg = 'That user is already a collaborator.';
-        } else {
-          errorMsg = 'Failed to add collaborator. Please try again.';
-        }
-      } else {
-        errorMsg = 'Failed to add collaborator. Please try again.';
-      }
+    } catch {
+      errorMsg = 'Failed to add collaborator. Please try again.';
     } finally {
       adding = false;
     }
@@ -85,7 +121,11 @@
 
   async function handleRemove(invite: Collaborator) {
     try {
-      await apiService.removeCollaborator(invite.id);
+      try {
+        await apiService.removeCollaborator(invite.id);
+      } catch {
+        await deleteDoc(doc(db, 'collaborations', invite.id));
+      }
       collaborators = collaborators.filter(c => c.id !== invite.id);
     } catch {
       errorMsg = 'Failed to remove collaborator. Please try again.';
