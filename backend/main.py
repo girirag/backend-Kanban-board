@@ -35,6 +35,23 @@ class TaskUpdate(BaseModel):
     description: Optional[str] = None
     assignees: Optional[List[str]] = None
 
+class CollaborationCreate(BaseModel):
+    ownerUserId: str
+    collaboratorEmail: str
+
+class CollaborationRecord(BaseModel):
+    id: str
+    ownerUserId: str
+    collaboratorUid: str
+    collaboratorEmail: str
+    createdAt: str
+
+class InvitedBoard(BaseModel):
+    inviteId: str
+    ownerUserId: str
+    ownerName: str
+    ownerEmail: str
+
 # In-memory storage for now (will be replaced with Firebase)
 tasks_db = []
 next_id = 1
@@ -192,6 +209,113 @@ async def health_check():
         "firebase_connected": firebase_connected,
         "storage": "firebase" if firebase_connected else "file_backup"
     }
+
+# --- Collaboration endpoints ---
+
+@app.post("/collaborations", response_model=CollaborationRecord)
+async def create_collaboration(payload: CollaborationCreate):
+    if not firebase_connected or not firebase_db:
+        raise HTTPException(status_code=503, detail="Firebase not connected")
+
+    # Look up collaborator by email in users collection
+    users_ref = firebase_db.collection('users')
+    query = users_ref.where('email', '==', payload.collaboratorEmail).limit(1).stream()
+    user_doc = next(query, None)
+    if user_doc is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    collaborator_uid = user_doc.id
+
+    # Check for duplicate
+    collabs_ref = firebase_db.collection('collaborations')
+    dup_query = (
+        collabs_ref
+        .where('ownerUserId', '==', payload.ownerUserId)
+        .where('collaboratorUid', '==', collaborator_uid)
+        .limit(1)
+        .stream()
+    )
+    if next(dup_query, None) is not None:
+        raise HTTPException(status_code=409, detail="Already a collaborator")
+
+    # Write new collaboration record
+    created_at = datetime.utcnow().isoformat()
+    doc_ref = collabs_ref.document()
+    record = {
+        'ownerUserId': payload.ownerUserId,
+        'collaboratorUid': collaborator_uid,
+        'collaboratorEmail': payload.collaboratorEmail,
+        'createdAt': created_at,
+    }
+    doc_ref.set(record)
+
+    return CollaborationRecord(id=doc_ref.id, **record)
+
+
+@app.get("/collaborations/invited", response_model=List[InvitedBoard])
+async def get_invited_boards(collaboratorUid: str):
+    if not firebase_connected or not firebase_db:
+        raise HTTPException(status_code=503, detail="Firebase not connected")
+
+    collabs_ref = firebase_db.collection('collaborations')
+    docs = collabs_ref.where('collaboratorUid', '==', collaboratorUid).stream()
+
+    results: List[InvitedBoard] = []
+    for doc in docs:
+        data = doc.to_dict()
+        owner_uid = data.get('ownerUserId', '')
+        owner_doc = firebase_db.collection('users').document(owner_uid).get()
+        if owner_doc.exists:
+            owner_data = owner_doc.to_dict()
+            owner_name = owner_data.get('displayName', '')
+            owner_email = owner_data.get('email', '')
+        else:
+            owner_name = ''
+            owner_email = ''
+        results.append(InvitedBoard(
+            inviteId=doc.id,
+            ownerUserId=owner_uid,
+            ownerName=owner_name,
+            ownerEmail=owner_email,
+        ))
+
+    return results
+
+
+@app.get("/collaborations", response_model=List[CollaborationRecord])
+async def get_collaborations(ownerUserId: str):
+    if not firebase_connected or not firebase_db:
+        raise HTTPException(status_code=503, detail="Firebase not connected")
+
+    collabs_ref = firebase_db.collection('collaborations')
+    docs = collabs_ref.where('ownerUserId', '==', ownerUserId).stream()
+
+    results: List[CollaborationRecord] = []
+    for doc in docs:
+        data = doc.to_dict()
+        results.append(CollaborationRecord(
+            id=doc.id,
+            ownerUserId=data.get('ownerUserId', ''),
+            collaboratorUid=data.get('collaboratorUid', ''),
+            collaboratorEmail=data.get('collaboratorEmail', ''),
+            createdAt=data.get('createdAt', ''),
+        ))
+
+    return results
+
+
+@app.delete("/collaborations/{invite_id}")
+async def delete_collaboration(invite_id: str):
+    if not firebase_connected or not firebase_db:
+        raise HTTPException(status_code=503, detail="Firebase not connected")
+
+    doc_ref = firebase_db.collection('collaborations').document(invite_id)
+    if not doc_ref.get().exists:
+        raise HTTPException(status_code=404, detail="Collaboration not found")
+
+    doc_ref.delete()
+    return {"message": f"Collaboration {invite_id} deleted successfully"}
+
 
 # Firebase integration
 firebase_db = None

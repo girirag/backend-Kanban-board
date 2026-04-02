@@ -33,6 +33,24 @@ export interface TaskUpdate {
   assignees?: string[];
 }
 
+export interface Collaborator {
+  id: string;
+  collaboratorUid: string;
+  collaboratorEmail: string;
+}
+
+export interface InvitedBoard {
+  inviteId: string;
+  ownerUserId: string;
+  ownerName: string;
+  ownerEmail: string;
+}
+
+export interface CollaborationCreate {
+  ownerUserId: string;
+  collaboratorEmail: string;
+}
+
 class ApiService {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
@@ -90,6 +108,27 @@ class ApiService {
 
   async healthCheck(): Promise<{ status: string; firebase_connected: boolean }> {
     return this.request('/health');
+  }
+
+  async getCollaborators(ownerUserId: string): Promise<Collaborator[]> {
+    return this.request<Collaborator[]>(`/collaborations?ownerUserId=${ownerUserId}`);
+  }
+
+  async addCollaborator(payload: CollaborationCreate): Promise<Collaborator> {
+    return this.request<Collaborator>('/collaborations', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async removeCollaborator(inviteId: string): Promise<void> {
+    await this.request(`/collaborations/${inviteId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getInvitedBoards(collaboratorUid: string): Promise<InvitedBoard[]> {
+    return this.request<InvitedBoard[]>(`/collaborations/invited?collaboratorUid=${collaboratorUid}`);
   }
 }
 

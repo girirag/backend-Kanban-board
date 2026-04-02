@@ -1,10 +1,12 @@
 <script lang="ts">
   import { dndzone } from 'svelte-dnd-action';
   import { onMount, onDestroy } from "svelte";
-  import { apiService, type Task } from '../lib/api';
+  import { apiService, type Task, type InvitedBoard } from '../lib/api';
   import { onAuthChange, logout } from '../lib/auth';
   import Login from '../lib/components/Login.svelte';
   import TaskDetailModal from '../lib/components/TaskDetailModal.svelte';
+  import CollaboratePanel from '../lib/components/CollaboratePanel.svelte';
+  import BoardSwitcher from '../lib/components/BoardSwitcher.svelte';
   import type { User } from 'firebase/auth';
 
   const columns = ["Planning", "To Do", "In Progress", "In Review", "Done"];
@@ -22,6 +24,15 @@
   let taskId = 1;
   let errorMessage = '';
   let selectedTask: Task | null = null;
+
+  let activeBoardOwnerId: string = '';
+  let activeBoardOwnerName: string = '';
+  let invitedBoards: InvitedBoard[] = [];
+  let showCollaboratePanel: boolean = false;
+
+  $: boardLabel = activeBoardOwnerId === currentUser?.uid
+    ? 'My Board'
+    : `${activeBoardOwnerName.split(' ')[0]}'s Board`;
 
   let board: Record<string, Task[]> = {};
   columns.forEach(col => board[col] = []);
@@ -80,8 +91,16 @@
       authLoading = false;
       
       if (user) {
+        activeBoardOwnerId = user.uid;
+        activeBoardOwnerName = '';
         loadFromLocalStorage();
         await connectToAPI();
+        try {
+          invitedBoards = await apiService.getInvitedBoards(user.uid);
+        } catch (err) {
+          console.error('Failed to load invited boards:', err);
+          invitedBoards = [];
+        }
       }
     });
   });
@@ -91,6 +110,32 @@
       unsubscribeAuth();
     }
   });
+
+  async function loadTasks(ownerUid: string) {
+    if (!apiConnected) return;
+    try {
+      const tasks = await apiService.getTasks(ownerUid);
+      columns.forEach(col => board[col] = []);
+      tasks.forEach(task => {
+        if (board[task.column]) {
+          board[task.column].push(task);
+        }
+      });
+      if (tasks.length > 0) {
+        taskId = Math.max(...tasks.map(t => t.id)) + 1;
+      }
+      board = { ...board };
+    } catch (error) {
+      console.error('Failed to load tasks:', error);
+    }
+  }
+
+  function handleBoardSwitch(event: CustomEvent<{ userId: string; ownerName: string }>) {
+    const { userId, ownerName } = event.detail;
+    activeBoardOwnerId = userId;
+    activeBoardOwnerName = ownerName;
+    loadTasks(userId);
+  }
 
   async function handleLogout() {
     try {
@@ -113,7 +158,7 @@
       
       if (apiConnected) {
         errorMessage = '';
-        const tasks = await apiService.getTasks(currentUser.uid);
+        const tasks = await apiService.getTasks(activeBoardOwnerId || currentUser.uid);
         console.log('Tasks loaded from API:', tasks);
         
         columns.forEach(col => board[col] = []);
@@ -159,7 +204,7 @@
         const newTaskData = await apiService.createTask({
           text: trimmedTask,
           column: "Planning",
-          userId: currentUser.uid
+          userId: activeBoardOwnerId || currentUser.uid
         });
         
         board["Planning"] = [...board["Planning"], newTaskData];
@@ -180,7 +225,7 @@
           id: taskId++,
           text: trimmedTask,
           column: "Planning",
-          userId: currentUser.uid
+          userId: activeBoardOwnerId || currentUser.uid
         };
         board["Planning"] = [...board["Planning"], newItem];
         board = { ...board };
@@ -193,7 +238,7 @@
         id: taskId++,
         text: trimmedTask,
         column: "Planning",
-        userId: currentUser.uid
+        userId: activeBoardOwnerId || currentUser.uid
       };
       board["Planning"] = [...board["Planning"], newItem];
       board = { ...board };
@@ -404,6 +449,37 @@
     background: linear-gradient(135deg, #b91c1c 0%, #dc2626 100%);
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+  }
+  
+  .board-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #7f1d1d;
+    background: #fee2e2;
+    border: 1.5px solid #fca5a5;
+    border-radius: 6px;
+    padding: 0.2rem 0.6rem;
+    white-space: nowrap;
+  }
+
+  .collaborate-btn {
+    padding: 0.4rem 0.875rem;
+    background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.25s;
+    box-shadow: 0 3px 8px rgba(220, 38, 38, 0.25);
+    white-space: nowrap;
+  }
+
+  .collaborate-btn:hover {
+    background: linear-gradient(135deg, #b91c1c 0%, #dc2626 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 5px 14px rgba(220, 38, 38, 0.35);
   }
   
   .loading-container {
@@ -941,6 +1017,20 @@
         <div class="board-title">
           <div class="board-icon">📋</div>
           <h1 class="board-name">Project Board</h1>
+          <span class="board-label">{boardLabel}</span>
+          {#if invitedBoards.length > 0}
+            <BoardSwitcher
+              ownBoard={{ userId: currentUser.uid, label: 'My Board' }}
+              {invitedBoards}
+              activeUserId={activeBoardOwnerId}
+              on:switch={handleBoardSwitch}
+            />
+          {/if}
+          {#if activeBoardOwnerId === currentUser?.uid}
+            <button class="collaborate-btn" on:click={() => showCollaboratePanel = true}>
+              👥 Collaborate
+            </button>
+          {/if}
         </div>
         {#if currentUser}
           <div class="user-info">
@@ -1000,7 +1090,7 @@
               <div class="task" on:click={(e) => { e.stopPropagation(); selectedTask = task; }}>
                 <div class="task-content">
                   <div class="task-text">{task.text}</div>
-                  {#if column === "Done"}
+                  {#if column === "Done" && activeBoardOwnerId === currentUser?.uid}
                     <button
                       class="delete-btn"
                       on:click={(e) => deleteTask(task.id, column, e)}
@@ -1046,4 +1136,13 @@
   on:save={handleTaskDetailSave}
   on:close={() => selectedTask = null}
 />
+
+{#if currentUser}
+  <CollaboratePanel
+    ownerUserId={currentUser.uid}
+    currentUserEmail={currentUser.email ?? ''}
+    open={showCollaboratePanel}
+    on:close={() => showCollaboratePanel = false}
+  />
+{/if}
 {/if}
