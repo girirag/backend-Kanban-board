@@ -2,36 +2,43 @@ import { auth, googleProvider, db } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 
-export async function signInWithGoogle(): Promise<User> {
+export async function registerUserAndResolveInvites(user: User): Promise<void> {
+  const { uid, email, displayName } = user;
   try {
-    const result = await signInWithPopup(auth, googleProvider);
-    const { uid, email, displayName } = result.user;
-
-    // Non-blocking upsert — best-effort, does not delay sign-in return
-    setDoc(
+    // Upsert user record
+    await setDoc(
       doc(db, 'users', uid),
       { uid, email, displayName, updatedAt: serverTimestamp() },
       { merge: true }
-    ).then(async () => {
-      // Resolve any pending collaboration invites for this email
-      if (email) {
-        try {
-          const collabRef = collection(db, 'collaborations');
-          const pendingQuery = query(collabRef, where('collaboratorEmail', '==', email), where('pending', '==', true));
-          const snapshot = await getDocs(pendingQuery);
-          if (!snapshot.empty) {
-            const batch = writeBatch(db);
-            snapshot.forEach(docSnap => {
-              batch.update(docSnap.ref, { collaboratorUid: uid, pending: false });
-            });
-            await batch.commit();
-          }
-        } catch (err) {
-          console.error('Error resolving pending invites:', err);
-        }
+    );
+    // Resolve any pending collaboration invites for this email
+    if (email) {
+      const collabRef = collection(db, 'collaborations');
+      const pendingQuery = query(
+        collabRef,
+        where('collaboratorEmail', '==', email),
+        where('pending', '==', true)
+      );
+      const snapshot = await getDocs(pendingQuery);
+      if (!snapshot.empty) {
+        const batch = writeBatch(db);
+        snapshot.forEach(docSnap => {
+          batch.update(docSnap.ref, { collaboratorUid: uid, pending: false });
+        });
+        await batch.commit();
+        console.log(`Resolved ${snapshot.size} pending invite(s) for ${email}`);
       }
-    }).catch((err) => console.error('Error writing user record:', err));
+    }
+  } catch (err) {
+    console.error('Error registering user or resolving invites:', err);
+  }
+}
 
+export async function signInWithGoogle(): Promise<User> {
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    // Await registration + invite resolution so board switcher loads correctly
+    await registerUserAndResolveInvites(result.user);
     return result.user;
   } catch (error) {
     console.error('Error signing in with Google:', error);

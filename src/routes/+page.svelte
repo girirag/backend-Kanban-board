@@ -2,7 +2,7 @@
   import { dndzone } from 'svelte-dnd-action';
   import { onMount, onDestroy } from "svelte";
   import { apiService, type Task, type InvitedBoard } from '../lib/api';
-  import { onAuthChange, logout } from '../lib/auth';
+  import { onAuthChange, logout, registerUserAndResolveInvites } from '../lib/auth';
   import Login from '../lib/components/Login.svelte';
   import TaskDetailModal from '../lib/components/TaskDetailModal.svelte';
   import CollaboratePanel from '../lib/components/CollaboratePanel.svelte';
@@ -95,11 +95,29 @@
         activeBoardOwnerName = '';
         loadFromLocalStorage();
         await connectToAPI();
+        // Resolve any pending invites first, then load invited boards
+        await registerUserAndResolveInvites(user);
         try {
           invitedBoards = await apiService.getInvitedBoards(user.uid);
         } catch (err) {
           console.error('Failed to load invited boards:', err);
-          invitedBoards = [];
+          // Fallback: query Firestore directly
+          try {
+            const { collection, query, where, getDocs } = await import('firebase/firestore');
+            const { db } = await import('../lib/firebase');
+            const snap = await getDocs(query(
+              collection(db, 'collaborations'),
+              where('collaboratorUid', '==', user.uid)
+            ));
+            invitedBoards = snap.docs.map(d => ({
+              inviteId: d.id,
+              ownerUserId: d.data().ownerUserId,
+              ownerName: d.data().ownerName || d.data().ownerEmail || 'Unknown',
+              ownerEmail: d.data().ownerEmail || '',
+            }));
+          } catch {
+            invitedBoards = [];
+          }
         }
       }
     });
