@@ -1018,6 +1018,127 @@
     0%, 100% { box-shadow: 0 0 8px #ef4444; }
     50% { box-shadow: 0 0 16px #ef4444; }
   }
+
+  /* ── Responsive / Mobile ── */
+  @media (max-width: 768px) {
+    .board-container {
+      padding: 0.75rem;
+      align-items: flex-start;
+    }
+
+    .board-wrapper {
+      width: 100%;
+      padding: 1rem;
+      border-radius: 16px;
+    }
+
+    .board-header {
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 0.875rem;
+    }
+
+    .board-title {
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .board-name {
+      font-size: 1.1rem;
+    }
+
+    .board-icon {
+      width: 36px;
+      height: 36px;
+      font-size: 1.2rem;
+    }
+
+    .user-info {
+      margin-left: 0;
+      margin-right: 0;
+      flex-wrap: wrap;
+    }
+
+    .user-name {
+      display: none;
+    }
+
+    .connection-status {
+      margin-left: 0;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.75rem;
+    }
+
+    .add-task-section {
+      flex-direction: column;
+    }
+
+    .task-input {
+      max-width: 100%;
+    }
+
+    /* Stack columns vertically on mobile */
+    .kanban {
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .column {
+      min-height: auto;
+    }
+
+    .dnd-zone {
+      min-height: 80px;
+      padding: 0.5rem 0.75rem;
+    }
+
+    .task {
+      padding: 0.875rem;
+      margin-bottom: 0.625rem;
+    }
+
+    .task-text {
+      font-size: 0.875rem;
+    }
+
+    .collaborate-btn {
+      font-size: 0.75rem;
+      padding: 0.35rem 0.65rem;
+    }
+
+    .board-label {
+      font-size: 0.7rem;
+    }
+
+    .logout-btn {
+      padding: 0.4rem 0.75rem;
+      font-size: 0.8rem;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .board-wrapper {
+      padding: 0.75rem;
+      border-radius: 12px;
+    }
+
+    .board-name {
+      font-size: 1rem;
+    }
+
+    .column-title {
+      font-size: 0.75rem;
+      letter-spacing: 0.8px;
+    }
+
+    .column-emoji {
+      font-size: 1rem;
+    }
+
+    .add-btn {
+      padding: 0.65rem 1rem;
+    }
+  }
 </style>
 
 {#if authLoading}

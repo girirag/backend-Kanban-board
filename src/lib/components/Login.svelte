@@ -152,6 +152,23 @@
   .popup-help li {
     margin-bottom: 0.25rem;
   }
+
+  @media (max-width: 480px) {
+    .login-card {
+      padding: 2rem 1.25rem;
+      border-radius: 16px;
+    }
+
+    .login-title {
+      font-size: 1.5rem;
+    }
+
+    .login-icon {
+      width: 64px;
+      height: 64px;
+      font-size: 2.2rem;
+    }
+  }
 </style>
 
 <div class="login-container">
